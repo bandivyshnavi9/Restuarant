@@ -1,0 +1,83 @@
+---
+resources:
+- name: Restuarant
+  type: git
+  source:
+    uri: {{github-repository}}
+    branch: master
+    private_key: {{github-private-key}}
+
+- name: Restuarant-artifacts
+  type: s3
+  source:
+    bucket: {{aws-bucket}}
+    regexp: releases/Restuarant-(.*).jar
+    access_key_id: {{aws-access-key-id}}
+    secret_access_key: {{aws-secret-access-key}}
+
+- name: version
+  type: semver
+  source:
+    bucket: {{aws-bucket}}
+    key: Restuarant/version
+    access_key_id: {{aws-access-key-id}}
+    secret_access_key: {{aws-secret-access-key}}
+
+- name: review-deployment
+  type: cf
+  source:
+    api: {{cf-api-url}}
+    username: {{cf-username}}
+    password: {{cf-password}}
+    organization: {{cf-org}}
+    space: review
+
+- name: production-deployment
+  type: cf
+  source:
+    api: {{cf-api-url}}
+    username: {{cf-username}}
+    password: {{cf-password}}
+    organization: {{cf-org}}
+    space: production
+
+jobs:
+- name: build
+  plan:
+  - get: Restuarant
+    trigger: true
+  - get: version
+    params: {bump: patch}
+  - task: build and test
+    file: Restuarant/ci/build.yml
+  - put: Restuarant-artifacts
+    params:
+      file: build-output/Restuarant-*.jar
+  - put: version
+    params:
+      file: version/number
+
+- name: deploy-review
+  plan:
+  - get: Restuarant
+  - get: Restuarant-artifacts
+    trigger: true
+    passed: [build]
+  - put: review-deployment
+    params:
+      manifest: Restuarant/manifest-review.yml
+      path: Restuarant-artifacts/Restuarant-*.jar
+      environment_variables:
+        WELCOME_MESSAGE: "Hello from the review environment"
+
+- name: deploy-production
+  plan:
+  - get: Restuarant
+  - get: Restuarant-artifacts
+    passed: [deploy-review]
+  - put: production-deployment
+    params:
+      manifest: Restuarant/manifest-production.yml
+      path: Restuarant-artifacts/Restuarant-*.jar
+      environment_variables:
+        WELCOME_MESSAGE: "Hello from the production environment"

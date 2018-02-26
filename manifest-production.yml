@@ -2,4 +2,4 @@
 applications:
 - name: Restuarant
   path: build/libs/Restuarant-0.0.1-SNAPSHOT.jar
-  random-route: true
+  host: vb-Restuarant
